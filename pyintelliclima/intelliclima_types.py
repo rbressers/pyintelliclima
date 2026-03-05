@@ -181,8 +181,8 @@ class IntelliClimaECO:
     tperc: str | None
     fcool: str  # probably referring to 'free cooling' feature in summer-mode
     ws: str  # winter/summer mode ("0" = winter, "1" = summer)
-    filter_from: str
-    filter_active: str
+    filter_from: str | None
+    filter_active: str | None
     timezone: str | None
     co2: str | None
     sanification: str | None
