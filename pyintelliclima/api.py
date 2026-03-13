@@ -75,7 +75,9 @@ def create_mode_speed_command(device_sn: str, mode: FanMode, speed: FanSpeed) ->
         mode,
         speed,
     )
-    partial_command = "0A" + device_sn + "000E2F00500000" + f"{int(mode):02d}" + f"{int(speed):02d}"
+    # unhexlify requires an even-length string (2 hex chars per byte)
+    padded_sn = "0" + device_sn if len(device_sn) % 2 else device_sn
+    partial_command = "0A" + padded_sn + "000E2F00500000" + f"{int(mode):02d}" + f"{int(speed):02d}"
     base_data = bytearray(hex_to_bytes(partial_command))
     base_data.append(0x00)  # Placeholder for checksum
     base_data.append(0x0D)  # Termination byte
