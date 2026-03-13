@@ -62,3 +62,16 @@ async def test_turn_off_calls_set_mode_speed(mock_set_mode_speed):
 
     assert result is True
     mock_set_mode_speed.assert_awaited_once_with("ABCDEF01", mode="0", speed="0")
+
+
+@patch.object(IntelliClimaEcocomfortAPI, "set_mode_speed", new_callable=AsyncMock)
+async def test_set_mode_speed_auto_calls_set_mode_speed(mock_set_mode_speed):
+    session = MagicMock()
+    api = IntelliClimaEcocomfortAPI(session, token_headers={})
+
+    mock_set_mode_speed.return_value = True
+
+    result = await api.set_mode_speed_auto("ABCDEF01")
+
+    assert result is True
+    mock_set_mode_speed.assert_awaited_once_with("ABCDEF01", mode="4", speed="10")

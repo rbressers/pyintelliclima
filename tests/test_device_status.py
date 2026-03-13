@@ -100,6 +100,25 @@ async def test_get_all_device_status_basic(mock_post):
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
+async def test_get_all_device_status_eco3_only_no_crash(mock_post, caplog):
+    """ECO3-only device lists must not crash: unsupported devices are skipped with a
+    warning and an empty IntelliClimaDevices is returned."""
+    import logging
+
+    api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
+    api.device_id_types = {"20": "ECO3"}
+
+    mock_post.return_value = {"status": "OK", "data": []}
+
+    with caplog.at_level(logging.WARNING, logger="pyintelliclima.api"):
+        devices = await api.get_all_device_status()
+
+    assert isinstance(devices, IntelliClimaDevices)
+    assert devices.num_devices == 0
+    assert any("ECO3" in record.message for record in caplog.records)
+
+
+@patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
 async def test_get_all_device_status_invalid_json_falls_back(mock_post):
     api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
     api.device_id_types = {"10": "ECO"}
