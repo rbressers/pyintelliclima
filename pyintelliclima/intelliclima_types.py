@@ -364,6 +364,29 @@ class IntelliClimaC800:
 
 
 @dataclass
+class IntelliClimaFilterStatsEntry:
+    """Per-speed-bucket runtime hours since `from_date`, used for filter wear calculation."""
+
+    night_tot_hour: str
+    low_tot_hour: str
+    medium_tot_hour: str
+    high_tot_hour: str
+    boost_tot_hour: str
+
+
+@dataclass
+class IntelliClimaFilterStatus:
+    """Server response format for the filter status calculation request."""
+
+    serial: str
+    is_active: bool
+    from_date: str
+    stats: list[IntelliClimaFilterStatsEntry]
+    totale: float
+    change_filter: bool
+
+
+@dataclass
 class IntelliClimaDevices:
     """Dataclass for storing intelliclima devices."""
 

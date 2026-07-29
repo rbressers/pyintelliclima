@@ -27,3 +27,35 @@ class FanMode(StrEnum):
     outward = "2"
     alternate = "3"
     sensor = "4"
+
+
+class Season(StrEnum):
+    """Winter/summer mode for EcoComfort VMC devices."""
+
+    winter = "0"
+    summer = "1"
+
+
+class FreeCoolingLevel(StrEnum):
+    """Free cooling intake/outdoor delta threshold, only effective in summer mode."""
+
+    off = "0"
+    low = "1"
+    medium = "2"
+    high = "3"
+
+
+class SlaveRotation(StrEnum):
+    """Direction of rotation for a slave/satellite unit relative to its master."""
+
+    concordant = "1"
+    discordant = "2"
+
+
+class ThresholdLevel(StrEnum):
+    """Sensor-mode threshold levels for humidity/VOC/luminosity triggers."""
+
+    off = "0"
+    low = "1"
+    medium = "2"
+    high = "3"

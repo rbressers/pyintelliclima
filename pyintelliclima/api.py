@@ -12,10 +12,21 @@ from typing import Any, Literal
 from aiohttp import ClientError, ClientSession
 from dacite import from_dict
 
-from .const import API_BASE_URL, API_MONO, REFRESH_DELAY, FanMode, FanSpeed
+from .const import (
+    API_BASE_URL,
+    API_MONO,
+    REFRESH_DELAY,
+    FanMode,
+    FanSpeed,
+    FreeCoolingLevel,
+    Season,
+    SlaveRotation,
+    ThresholdLevel,
+)
 from .intelliclima_types import (
     IntelliClimaDevices,
     IntelliClimaECO,
+    IntelliClimaFilterStatus,
     IntelliClimaLoginBody,
 )
 
@@ -54,7 +65,9 @@ def bytes_to_hex(x: bytearray) -> str:
     return binascii.hexlify(x).decode()
 
 
-def checksum_crc8_nrsc5(data_bytes: bytearray, poly: Literal[49] = 0x31, init: Literal[255] = 0xFF):
+def checksum_crc8_nrsc5(
+    data_bytes: bytearray, poly: Literal[49] = 0x31, init: Literal[255] = 0xFF
+) -> int:
     """Calculates 8 bit CRC8 NRSC5 checksum."""
     crc = init
     for b in data_bytes:
@@ -78,6 +91,78 @@ def create_mode_speed_command(device_sn: str, mode: FanMode, speed: FanSpeed) ->
     # unhexlify requires an even-length string (2 hex chars per byte)
     padded_sn = "0" + device_sn if len(device_sn) % 2 else device_sn
     partial_command = "0A" + padded_sn + "000E2F00500000" + f"{int(mode):02d}" + f"{int(speed):02d}"
+    base_data = bytearray(hex_to_bytes(partial_command))
+    base_data.append(0x00)  # Placeholder for checksum
+    base_data.append(0x0D)  # Termination byte
+
+    cs = checksum_crc8_nrsc5(base_data[1:-2])
+    base_data[-2] = cs  # Set checksum byte
+
+    return bytes_to_hex(base_data).upper()
+
+
+def create_offsets_command(device_sn: str, temperature_offset: float, humidity_offset: int) -> str:
+    """Creates the api request command that sets temperature and humidity calibration offsets.
+
+    Both offsets share the same device register, so both must be sent together - pass the
+    device's current value for whichever offset isn't being changed.
+    """
+    padded_sn = "0" + device_sn if len(device_sn) % 2 else device_sn
+    temp_raw = round(temperature_offset * 100) & 0xFFFF
+    hum_raw = round(humidity_offset * 100) & 0xFFFF
+    partial_command = "0A" + padded_sn + "00102F00210000" + f"{temp_raw:04X}" + f"{hum_raw:04X}"
+    base_data = bytearray(hex_to_bytes(partial_command))
+    base_data.append(0x00)  # Placeholder for checksum
+    base_data.append(0x0D)  # Termination byte
+
+    cs = checksum_crc8_nrsc5(base_data[1:-2])
+    base_data[-2] = cs  # Set checksum byte
+
+    return bytes_to_hex(base_data).upper()
+
+
+def create_advanced_settings_command(
+    device_sn: str,
+    *,
+    humidity_threshold: ThresholdLevel | None = None,
+    humidity_threshold_advanced: bool = False,
+    voc_threshold: ThresholdLevel | None = None,
+    voc_threshold_advanced: bool = False,
+    lux_threshold: ThresholdLevel | None = None,
+    slave_rotation: SlaveRotation | None = None,
+) -> str:
+    """Creates the api request command for the shared humidity/VOC/lux threshold and
+    slave-rotation register.
+
+    A field left as `None` is preserved unchanged on the device (sent as `0x7F`), matching
+    the same "preserve" convention documented for this device's BLE protocol in the
+    esphome-ecocomfort2 project. Only pass the field(s) you actually want to change.
+    """
+
+    def threshold_byte(level: ThresholdLevel | None, advanced: bool) -> int:
+        if level is None:
+            return 0x7F
+        value = int(level)
+        return value + 0x80 if advanced and value else value
+
+    padded_sn = "0" + device_sn if len(device_sn) % 2 else device_sn
+    rh_byte = threshold_byte(humidity_threshold, humidity_threshold_advanced)
+    lux_byte = threshold_byte(lux_threshold, advanced=False)
+    voc_byte = threshold_byte(voc_threshold, voc_threshold_advanced)
+    rotation_byte = 0x7F if slave_rotation is None else int(slave_rotation)
+
+    partial_command = (
+        "0A"
+        + padded_sn
+        + "00182F00200000"
+        + "7F"
+        + f"{rh_byte:02X}"
+        + f"{lux_byte:02X}"
+        + f"{voc_byte:02X}"
+        + "7F"
+        + f"{rotation_byte:02X}"
+        + "000000000000"
+    )
     base_data = bytearray(hex_to_bytes(partial_command))
     base_data.append(0x00)  # Placeholder for checksum
     base_data.append(0x0D)  # Termination byte
@@ -140,6 +225,95 @@ class IntelliClimaEcocomfortAPI:
         """Set the auto preset mode and speed."""
         return await self.set_mode_speed(device_sn, mode=FanMode.sensor, speed=FanSpeed.auto_set)
 
+    async def set_season(self, device_sn: str, season: Season) -> bool:
+        """Set winter/summer mode for an ecocomfort device."""
+        payload = {"serial": device_sn, "data": json.dumps({"ws": int(season)})}
+        await post_to_session(
+            self._session,
+            "eco/setdata/",
+            headers=self._token_headers,
+            json_payload=payload,
+        )
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
+    async def set_free_cooling(self, device_sn: str, level: FreeCoolingLevel) -> bool:
+        """Set the free cooling level for an ecocomfort device (only effective in summer mode)."""
+        payload = {"serial": device_sn, "value": int(level)}
+        await post_to_session(
+            self._session,
+            "eco/freecoolset/",
+            headers=self._token_headers,
+            json_payload=payload,
+        )
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
+    async def set_temperature_and_humidity_offsets(
+        self, device_sn: str, temperature_offset: float, humidity_offset: int
+    ) -> bool:
+        """Set temperature (°C) and humidity (%) calibration offsets.
+
+        Both values must be provided together since they share the same device register -
+        pass the device's current value for whichever offset isn't being changed.
+        """
+        command = create_offsets_command(device_sn, temperature_offset, humidity_offset)
+        payload = {"trama": command}
+        await post_to_session(
+            self._session,
+            "eco/send/",
+            headers=self._token_headers,
+            json_payload=payload,
+        )
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
+    async def set_advanced_settings(
+        self,
+        device_sn: str,
+        *,
+        humidity_threshold: ThresholdLevel | None = None,
+        humidity_threshold_advanced: bool = False,
+        voc_threshold: ThresholdLevel | None = None,
+        voc_threshold_advanced: bool = False,
+        lux_threshold: ThresholdLevel | None = None,
+        slave_rotation: SlaveRotation | None = None,
+    ) -> bool:
+        """Set humidity/VOC/lux sensor-mode thresholds and/or slave rotation.
+
+        These fields share the same device register: any field left as `None` is
+        preserved unchanged, so only pass the field(s) you actually want to change.
+
+        NOTE: reverse-engineering on 2026-07-29 found that humidity/VOC/lux threshold
+        changes did not reliably persist or read back via `sync/cronos400` (nor in the
+        vendor app's own UI), suggesting a device/firmware-side issue rather than an API
+        quirk. Do not build a stateful consumer (e.g. a Home Assistant entity) on top of
+        the threshold fields without further verification. `slave_rotation` was confirmed
+        reliable both ways.
+        """
+        command = create_advanced_settings_command(
+            device_sn,
+            humidity_threshold=humidity_threshold,
+            humidity_threshold_advanced=humidity_threshold_advanced,
+            voc_threshold=voc_threshold,
+            voc_threshold_advanced=voc_threshold_advanced,
+            lux_threshold=lux_threshold,
+            slave_rotation=slave_rotation,
+        )
+        payload = {"trama": command}
+        await post_to_session(
+            self._session,
+            "eco/send/",
+            headers=self._token_headers,
+            json_payload=payload,
+        )
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
+    async def set_slave_rotation(self, device_sn: str, rotation: SlaveRotation) -> bool:
+        """Set the direction of rotation for a slave/satellite unit relative to its master."""
+        return await self.set_advanced_settings(device_sn, slave_rotation=rotation)
+
 
 class IntelliClimaAPI:
     """API client for IntelliClima."""
@@ -151,7 +325,7 @@ class IntelliClimaAPI:
         self._password = password
         self.auth_token: str | None = None
         self.user_id: str | None = None
-        self.house_id: str | None = None
+        self.house_ids: list[str] = []
         self.device_id_types: dict[str, str] = {}
         self._mono_url = API_BASE_URL + API_MONO
         self._token_headers = {
@@ -264,8 +438,18 @@ class IntelliClimaAPI:
 
         return IntelliClimaDevices(ecocomfort2_devices=eco_devices, c800_devices={})
 
+    async def get_filter_status(self, serial: str) -> IntelliClimaFilterStatus:
+        """Calculate the current filter wear/cleaning status for a single device."""
+        response = await post_to_session(
+            self._session,
+            "eco/filters/",
+            headers=self._token_headers,
+            json_payload={"serial": serial, "action": "CALCULATE"},
+        )
+        return from_dict(data_class=IntelliClimaFilterStatus, data=response)
+
     async def set_house_and_device_ids(self) -> None:
-        """Finds the user's house ID and corresponding devices."""
+        """Finds the user's houses and their corresponding devices."""
 
         try:
             LOGGER.info(f"Obtaining IntelliClima house & devices for user: {self.user_id}")
@@ -277,12 +461,12 @@ class IntelliClimaAPI:
             )
 
             houses = response.get("houses", {})
-            if houses:
-                self.house_id = list(houses.keys())[0]
-                self.device_id_types = {
-                    str(device.get("id")): device.get("tipo")
-                    for device in houses[self.house_id]
-                    if device.get("tipo") != "CH"
-                }
+            self.house_ids = list(houses.keys())
+            self.device_id_types = {
+                str(device.get("id")): device.get("tipo")
+                for house_id in self.house_ids
+                for device in houses[house_id]
+                if device.get("tipo") != "CH"
+            }
         except Exception as e:  # noqa: BLE001
             LOGGER.error(f"Error while getting houses for user: {self.user_id}: {e}")
