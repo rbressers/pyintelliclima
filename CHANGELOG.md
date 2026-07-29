@@ -38,3 +38,5 @@ not hardcoded in this repo.
 - Bumped minimum dependency/dev-tool versions (`aiohttp`, `pytest`, `ruff`, `basedpyright`, `rich`,
   `codespell`, `pytest-asyncio`, `pytest-cov`) to the versions currently tested against.
 - Added the `Python :: 3.14` classifier.
+
+[0.4.0]: https://github.com/dvdinth/pyintelliclima/compare/v0.3.1...v0.4.0
