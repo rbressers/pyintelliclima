@@ -8,6 +8,8 @@ not hardcoded in this repo.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-07-29
+
 ### Added
 
 - `IntelliClimaAPI.get_filter_status()` and `IntelliClimaFilterStatus`/`IntelliClimaFilterStatsEntry`
