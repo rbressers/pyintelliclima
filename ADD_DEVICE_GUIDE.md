@@ -118,12 +118,30 @@ sudo apt install adb -y
 
 ## Step 2: Install mitmproxy
 
-mitmproxy is the tool that will intercept and display the app's network requests. Install it
-with:
+mitmproxy is the tool that will intercept and display the app's network requests.
+
+> **Do not install mitmproxy with `sudo apt install mitmproxy`.** Ubuntu's package lags years
+> behind (Ubuntu 24.04 ships version 8.1.1), and old versions generate certificates that current
+> Android WebViews reject outright — every HTTPS request fails, with an error message that
+> misleadingly blames the certificate installation. See "Every HTTPS request fails with a
+> certificate error" under Troubleshooting for the full explanation.
+
+Install a current version with [uv](https://docs.astral.sh/uv/) instead:
 
 ```bash
-sudo apt install mitmproxy -y
+curl -LsSf https://astral.sh/uv/install.sh | sh     # skip if you already have uv
+uv tool install mitmproxy
 ```
+
+This puts `mitmproxy`, `mitmdump`, and `mitmweb` in `~/.local/bin`, which Ubuntu already has on
+your `PATH`. Confirm you are running version 12 or newer:
+
+```bash
+mitmweb --version
+```
+
+If it reports version 8 or 9, an old apt copy in `/usr/bin` is taking precedence. Remove it with
+`sudo apt remove mitmproxy` and check again.
 
 ---
 
@@ -212,6 +230,11 @@ sudo chmod 644 /var/lib/waydroid/overlay/system/etc/security/cacerts/a8990c1d.0
 sudo systemctl restart waydroid-container
 ```
 
+> mitmproxy keeps its certificate authority in `~/.mitmproxy` and reuses it across versions, so
+> this step is genuinely one-time. Upgrading mitmproxy later does **not** require reinstalling
+> the certificate. You only need to repeat this step if you delete `~/.mitmproxy` or reinstall
+> the Waydroid image (which wipes the overlay).
+
 ---
 
 ## Step 6: Start Capturing Traffic
@@ -239,6 +262,11 @@ mitmweb -p 8888 --listen-host 192.168.240.1
 
 mitmproxy will open a web interface in your browser at `http://127.0.0.1:8081`. Keep this
 tab open — this is where you will see captured requests.
+
+> **Keep the Waydroid window visible for the whole capture.** Waydroid's default
+> `suspend_action = freeze` (in `/var/lib/waydroid/waydroid.cfg`) suspends the whole Android
+> container whenever no window is displayed. A frozen container stops making network requests,
+> so a capture left running in the background silently records nothing.
 
 **6c.** Launch the **IntelliClima+** app inside Waydroid and log in with your IntelliClima
 credentials. Use the app normally for a few minutes. Specifically, make sure to:
@@ -320,10 +348,10 @@ Please include the following information in the issue:
 - Your **device model** (for example: IntelliClima ECOCOMFORT 3.0)
 - A short description of **what actions you performed** in the app while capturing
   (for example: "logged in, checked device status, set fan speed to medium, set auto mode"). Be very specific here in exactly what steps you took, and in what order. Otherwise it's very difficult to know which request corresponds to which action.
-- Your **operating system** (Ubuntu version)
+- Your **operating system** (Ubuntu version) and your **mitmproxy version**
+  (`mitmweb --version`)
 - Whether HTTPS traffic was successfully captured or only HTTP (if you only see HTTP requests,
-  the certificate installation may not have worked — try restarting Waydroid and repeating
-  step 6)
+  see "Every HTTPS request fails with a certificate error" in the Troubleshooting section)
 
 The more interactions you capture (especially changing different settings and modes), the
 more complete the protocol picture will be, and the easier it is to implement support.
@@ -341,13 +369,78 @@ more complete the protocol picture will be, and the easier it is to implement su
 - Try restarting Waydroid with `sudo systemctl restart waydroid-container` and repeating
   step 6.
 
-**IntelliClima+ shows a connection error or certificate error**
-- The certificate installation (step 5) may not have worked. Confirm the file exists:
+**Every HTTPS request fails with a certificate error**
+
+mitmproxy logs a line like this for every connection, including
+`intelliclima.fantinicosmi.it`:
+
+```
+Client TLS handshake failed. The client does not trust the proxy's certificate for
+intelliclima.fantinicosmi.it (OpenSSL Error([('SSL routines', '', 'sslv3 alert
+certificate unknown')]))
+```
+
+**This message is misleading.** It is mitmproxy's guess at why the client rejected the
+certificate, and the most common actual cause is not trust at all — it is **certificate
+lifetime**. Check first, before touching anything from step 5:
+
+- **Is your mitmproxy too old?** Run `mitmweb --version`. Versions 8 and 9 (including Ubuntu's
+  apt package) generate certificates valid for 367 days. The CA/Browser Forum limit on
+  certificate lifetime dropped to **200 days** for certificates issued after **2026-03-15**,
+  Chromium enforces that limit, and the Android WebView treats a CA installed into
+  `/system/etc/security/cacerts` as a publicly-trusted root — so the limit applies to
+  mitmproxy's certificates too. The result is a hard rejection on every request.
+
+  This is why a setup that worked before March 2026 can break with no changes on your side.
+  Fix it by installing a current mitmproxy as described in step 2. Your existing certificate
+  from step 5 stays valid — there is no need to reinstall it.
+
+  To confirm this is your problem, look for Chromium's real error code in the Android log while
+  the app is running:
+  ```bash
+  adb logcat -d | grep "net_error"
+  ```
+  `net_error -213` is `ERR_CERT_VALIDITY_TOO_LONG` and confirms the lifetime issue.
+  `net_error -202` (`ERR_CERT_AUTHORITY_INVALID`) is a genuine trust problem — in that case
+  continue below.
+
+- **Is the certificate actually installed?** Confirm the file exists:
   ```bash
   ls /var/lib/waydroid/overlay/system/etc/security/cacerts/
   ```
-  You should see a file named `<your-hash>.0`. If not, repeat step 5.
-- Make sure you restarted Waydroid after installing the certificate.
+  You should see a file named `<your-hash>.0`. If not, repeat step 5. Make sure the filename
+  hash matches your current certificate:
+  ```bash
+  openssl x509 -subject_hash_old -in ~/.mitmproxy/mitmproxy-ca-cert.pem
+  ```
+- **Did you restart Waydroid** after installing the certificate? The overlay is only applied at
+  container start.
+
+**Lots of failed handshakes to Google domains**
+
+Lines like these are **expected and harmless**:
+
+```
+Client TLS handshake failed. The client does not trust the proxy's certificate for
+android.googleapis.com
+```
+
+Google Play Services pins its own certificates, so mitmproxy cannot intercept
+`android.googleapis.com`, `*-pa.googleapis.com`, `gstatic.com` and similar. This has nothing to
+do with your setup and does not affect the IntelliClima+ capture — it is just noise, and there
+is a lot of it if you installed a Waydroid image that includes Google apps. Ignore it and look
+only for `intelliclima.fantinicosmi.it` requests.
+
+A cleaner option is to tell mitmproxy to intercept **only** the IntelliClima server and pass
+everything else straight through without touching it:
+
+```bash
+mitmweb -p 8888 --listen-host 192.168.240.1 --allow-hosts fantinicosmi
+```
+
+This removes the noise at the source rather than just hiding it: other hosts are forwarded
+without TLS interception, so Google's pinned connections keep working normally and Android stays
+happy about having a working internet connection.
 
 **`adb` command says "no devices found"**
 - Waydroid must be running before you use `adb`. Launch Waydroid from the application menu
