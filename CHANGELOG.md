@@ -8,6 +8,15 @@ not hardcoded in this repo.
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-04
+
+### Added
+
+- `IntelliClimaAPI.set_filter_tracking_active()` to enable or disable filter wear tracking for a
+  device (`eco/filters/`, `ACTIVATE`/`DEACTIVATE`).
+- `IntelliClimaAPI.reset_filter_counter()` to reset a device's accumulated filter wear counter
+  (`eco/filters/`, `RESET`).
+
 ## [0.4.0] - 2026-07-29
 
 ### Added
@@ -39,4 +48,5 @@ not hardcoded in this repo.
   `codespell`, `pytest-asyncio`, `pytest-cov`) to the versions currently tested against.
 - Added the `Python :: 3.14` classifier.
 
+[0.4.1]: https://github.com/dvdinth/pyintelliclima/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/dvdinth/pyintelliclima/compare/v0.3.1...v0.4.0

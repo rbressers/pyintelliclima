@@ -438,15 +438,30 @@ class IntelliClimaAPI:
 
         return IntelliClimaDevices(ecocomfort2_devices=eco_devices, c800_devices={})
 
-    async def get_filter_status(self, serial: str) -> IntelliClimaFilterStatus:
-        """Calculate the current filter wear/cleaning status for a single device."""
+    async def _post_filter_action(
+        self, serial: str, action: Literal["CALCULATE", "ACTIVATE", "DEACTIVATE", "RESET"]
+    ) -> IntelliClimaFilterStatus:
         response = await post_to_session(
             self._session,
             "eco/filters/",
             headers=self._token_headers,
-            json_payload={"serial": serial, "action": "CALCULATE"},
+            json_payload={"serial": serial, "action": action},
         )
         return from_dict(data_class=IntelliClimaFilterStatus, data=response)
+
+    async def get_filter_status(self, serial: str) -> IntelliClimaFilterStatus:
+        """Calculate the current filter wear/cleaning status for a single device."""
+        return await self._post_filter_action(serial, "CALCULATE")
+
+    async def set_filter_tracking_active(
+        self, serial: str, active: bool
+    ) -> IntelliClimaFilterStatus:
+        """Enable or disable filter wear tracking for a single device."""
+        return await self._post_filter_action(serial, "ACTIVATE" if active else "DEACTIVATE")
+
+    async def reset_filter_counter(self, serial: str) -> IntelliClimaFilterStatus:
+        """Reset the accumulated filter wear counter for a single device."""
+        return await self._post_filter_action(serial, "RESET")
 
     async def set_house_and_device_ids(self) -> None:
         """Finds the user's houses and their corresponding devices."""
