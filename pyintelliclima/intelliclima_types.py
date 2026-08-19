@@ -1,7 +1,7 @@
 """Several dataclasses for the IntelliClima api."""
 
 import json
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from typing import Literal
 
 from pyintelliclima.const import FanMode, FanSpeed
@@ -150,7 +150,7 @@ class IntelliClimaECO:
     role: str  # master/slave mode ("1" = master, "2" = slave)
     rh_thrs: str
     lux_thrs: str
-    voc_thrs: str
+    voc_thrs: str | None
     slv_rot: str
     slv_addr: str
     offset_temp: str
@@ -199,6 +199,11 @@ class IntelliClimaECO:
             self.pcustom = str([program.to_formatted_str() for program in self.pcustom]).replace(
                 " ", ""
             )
+
+
+@dataclass
+class IntelliClimaECO3(IntelliClimaECO):
+    """Status data returned by an ECOCOMFORT 3 device."""
 
 
 @dataclass
@@ -392,11 +397,14 @@ class IntelliClimaDevices:
 
     ecocomfort2_devices: dict[str, IntelliClimaECO]
     c800_devices: dict[str, IntelliClimaC800]
+    ecocomfort3_devices: dict[str, IntelliClimaECO3] = field(default_factory=dict)
 
     @property
     def num_devices(self):
         """List the total number of devices."""
-        return len(self.ecocomfort2_devices) + len(self.c800_devices)
+        return (
+            len(self.ecocomfort2_devices) + len(self.c800_devices) + len(self.ecocomfort3_devices)
+        )
 
     @classmethod
     def empty(cls):
@@ -404,4 +412,4 @@ class IntelliClimaDevices:
         return cls({}, {})
 
 
-AllIntelliClimaDevices = IntelliClimaECO | IntelliClimaC800
+AllIntelliClimaDevices = IntelliClimaECO | IntelliClimaECO3 | IntelliClimaC800

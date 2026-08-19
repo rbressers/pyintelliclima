@@ -8,6 +8,13 @@ not hardcoded in this repo.
 
 ## [Unreleased]
 
+### Added
+
+- ECOCOMFORT 3 device discovery and status parsing through the `ECO3s` sync payload.
+- `IntelliClimaEcocomfort3API` control client for power, mode, speed, and automatic sensor mode
+  through the `eco3/send/` endpoint.
+- `IntelliClimaECO3` model and `IntelliClimaDevices.ecocomfort3_devices` collection.
+
 ## [0.4.1] - 2026-08-04
 
 ### Added

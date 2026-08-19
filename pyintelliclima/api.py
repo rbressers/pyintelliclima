@@ -26,6 +26,7 @@ from .const import (
 from .intelliclima_types import (
     IntelliClimaDevices,
     IntelliClimaECO,
+    IntelliClimaECO3,
     IntelliClimaFilterStatus,
     IntelliClimaLoginBody,
 )
@@ -315,6 +316,39 @@ class IntelliClimaEcocomfortAPI:
         return await self.set_advanced_settings(device_sn, slave_rotation=rotation)
 
 
+class IntelliClimaEcocomfort3API:
+    """API client for ECOCOMFORT 3 communication."""
+
+    def __init__(self, session: ClientSession, token_headers: dict[str, Any]) -> None:
+        """Initialize the ECOCOMFORT 3 API client."""
+        self._session = session
+        self._token_headers = token_headers
+
+    async def set_token_headers(self, token_headers: dict[str, Any]) -> None:
+        """Set the ECOCOMFORT 3 API token headers."""
+        self._token_headers = token_headers
+
+    async def turn_off(self, device_sn: str) -> bool:
+        """Turn off an ECOCOMFORT 3 device."""
+        return await self.set_mode_speed(device_sn, mode=FanMode.off, speed=FanSpeed.off)
+
+    async def set_mode_speed(self, device_sn: str, mode: FanMode, speed: FanSpeed) -> bool:
+        """Set the mode and speed of an ECOCOMFORT 3 device."""
+        command = create_mode_speed_command(device_sn, mode, speed)
+        await post_to_session(
+            self._session,
+            "eco3/send/",
+            headers=self._token_headers,
+            json_payload={"trama": command},
+        )
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
+    async def set_mode_speed_auto(self, device_sn: str) -> bool:
+        """Set the automatic sensor mode and speed."""
+        return await self.set_mode_speed(device_sn, mode=FanMode.sensor, speed=FanSpeed.auto_set)
+
+
 class IntelliClimaAPI:
     """API client for IntelliClima."""
 
@@ -333,6 +367,7 @@ class IntelliClimaAPI:
             "TOKEN": "",
         }
         self.ecocomfort = IntelliClimaEcocomfortAPI(self._session, self._token_headers)
+        self.ecocomfort3 = IntelliClimaEcocomfort3API(self._session, self._token_headers)
 
     async def authenticate(self) -> bool:
         """Authenticate with the API."""
@@ -389,29 +424,44 @@ class IntelliClimaAPI:
         """Sets main API token headers and child device API token headers."""
         self._token_headers = token_headers
         await self.ecocomfort.set_token_headers(token_headers)
+        await self.ecocomfort3.set_token_headers(token_headers)
 
     async def get_all_device_status(
         self,
     ) -> IntelliClimaDevices:
         """Poll all devices."""
         device_ids_eco: list[str] = []
+        device_ids_eco3: list[str] = []
         for device_id, device_type in self.device_id_types.items():
             if device_type == "ECO":
                 device_ids_eco.append(str(device_id))
+            elif device_type == "ECO3":
+                device_ids_eco3.append(str(device_id))
             else:
                 LOGGER.warning(
-                    "Only ECOCOMFORT 2.0 is implemented at this moment! Ignoring device %s",
+                    "Ignoring unsupported IntelliClima device type %s",
                     device_type,
                 )
 
         devices_eco_string = ",".join(device_ids_eco)
+        devices_eco3_string = ",".join(device_ids_eco3)
         get_device_body = {
             "IDs": "",
             "ECOs": devices_eco_string,
+            "C900s": "",
+            "RHINOs": "",
+            "ECO3s": devices_eco3_string,
             "includi_eco": True,
             "includi_ledot": True,
+            "includi_c900": True,
+            "includi_rhino": True,
+            "includi_eco3": True,
         }
-        LOGGER.debug("Obtaining status for Intelliclima devices: %s", devices_eco_string)
+        LOGGER.debug(
+            "Obtaining status for IntelliClima ECO devices: %s; ECO3 devices: %s",
+            devices_eco_string,
+            devices_eco3_string,
+        )
 
         response = await post_to_session(
             self._session, "sync/cronos400", json_payload=get_device_body
@@ -419,6 +469,7 @@ class IntelliClimaAPI:
 
         # Parse 'model' and 'config' fields JSON strings to Python objects
         eco_devices: dict[str, IntelliClimaECO] = {}
+        eco3_devices: dict[str, IntelliClimaECO3] = {}
         for device_data in response.get("data", []):
             try:
                 device_data["model"] = json.loads(device_data.get("model", "{}"))
@@ -433,10 +484,19 @@ class IntelliClimaAPI:
             device_data["mode_set"] = FanMode(device_data["mode_set"])
             device_data["speed_set"] = FanSpeed(device_data["speed_set"])
 
-            eco_device = from_dict(data_class=IntelliClimaECO, data=device_data)
-            eco_devices[eco_device.id] = eco_device
+            device_id = str(device_data["id"])
+            if self.device_id_types.get(device_id) == "ECO3":
+                eco3_device = from_dict(data_class=IntelliClimaECO3, data=device_data)
+                eco3_devices[eco3_device.id] = eco3_device
+            else:
+                eco_device = from_dict(data_class=IntelliClimaECO, data=device_data)
+                eco_devices[eco_device.id] = eco_device
 
-        return IntelliClimaDevices(ecocomfort2_devices=eco_devices, c800_devices={})
+        return IntelliClimaDevices(
+            ecocomfort2_devices=eco_devices,
+            c800_devices={},
+            ecocomfort3_devices=eco3_devices,
+        )
 
     async def _post_filter_action(
         self, serial: str, action: Literal["CALCULATE", "ACTIVATE", "DEACTIVATE", "RESET"]
