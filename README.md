@@ -23,6 +23,17 @@ device(s), or share the logs as described so I can add them.
 
 This API was made by reverse engineering the cloud API, through the use of an android emulator and proxy to catch the Intelliclima+ app traffic. As such, no public API exists and the functionality of this module breaks if the API changes. This module is provided as-is, with no guarantees of correctness, stability, or continued functionality. Use it at your own risk.
 
+### ECOCOMFORT 3 air-quality values
+
+ECOCOMFORT 3 reports two distinct carbon-dioxide values:
+
+- `co2` is the device's CO2 channel.
+- `eco2` is the estimated CO2 value documented by Fantini Cosmi and displayed by the official app.
+  It aliases the cloud API's legacy `voc_state` field; it is not a TVOC concentration.
+
+Both values are returned as ppm strings. The distinction is based on the official ECOCOMFORT 3
+documentation and comparison of live device data with an independent CO2 monitor.
+
 ## Credits
 
 This was highly inspired by: https://github.com/ruizmarc/homebridge-intelliclima
