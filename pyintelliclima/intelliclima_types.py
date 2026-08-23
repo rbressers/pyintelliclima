@@ -205,11 +205,6 @@ class IntelliClimaECO:
 class IntelliClimaECO3(IntelliClimaECO):
     """Status data returned by an ECOCOMFORT 3 device."""
 
-    @property
-    def eco2(self) -> str:
-        """Return estimated CO2 from the legacy VOC status field."""
-        return self.voc_state
-
 
 @dataclass
 class IntelliClimaC800:

@@ -120,7 +120,8 @@ async def test_get_all_device_status_eco3(mock_post, caplog):
     assert eco3.fw == "0.9.6"
     assert eco3.voc_thrs is None
     assert eco3.co2 == "510"
-    assert eco3.eco2 == "750"
+    assert eco3.voc_state == "750"
+    assert eco3.aqi == "3"
     assert "unsupported" not in caplog.text
 
     request_body = mock_post.call_args.kwargs["json_payload"]
