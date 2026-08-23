@@ -40,9 +40,7 @@ async def test_turn_off(mock_set_mode_speed):
     mock_set_mode_speed.return_value = True
 
     assert await api.turn_off("AABBCCDD") is True
-    mock_set_mode_speed.assert_awaited_once_with(
-        "AABBCCDD", mode=FanMode.off, speed=FanSpeed.off
-    )
+    mock_set_mode_speed.assert_awaited_once_with("AABBCCDD", mode=FanMode.off, speed=FanSpeed.off)
 
 
 @patch.object(IntelliClimaEcocomfort3API, "set_mode_speed", new_callable=AsyncMock)
