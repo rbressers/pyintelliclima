@@ -6,6 +6,7 @@ import pytest
 from dacite import WrongTypeError
 
 from pyintelliclima.api import IntelliClimaAPI
+from pyintelliclima.const import FanMode
 from pyintelliclima.intelliclima_types import IntelliClimaDevices, IntelliClimaECO3
 
 pytestmark = pytest.mark.asyncio
@@ -119,6 +120,7 @@ async def test_get_all_device_status_eco3(mock_post, caplog):
     assert eco3.model.modello == "ECO3"
     assert eco3.fw == "0.9.6"
     assert eco3.voc_thrs is None
+    assert eco3.mode_set is FanMode.sensor
     assert eco3.co2 == "510"
     assert eco3.voc_state == "750"
     assert eco3.aqi == "3"

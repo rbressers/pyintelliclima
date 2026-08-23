@@ -481,7 +481,11 @@ class IntelliClimaAPI:
             except (KeyError, json.JSONDecodeError):
                 device_data["config"] = device_data.get("config")
 
-            device_data["mode_set"] = FanMode(device_data["mode_set"])
+            # The low nibble contains the airflow mode. ECOCOMFORT devices may
+            # set flags in the upper nibble (for example, ECOCOMFORT 3 has been
+            # observed returning 20 for sensor mode: 0x10 | 0x04).
+            mode_set = int(device_data["mode_set"]) & 0x0F
+            device_data["mode_set"] = FanMode(str(mode_set))
             device_data["speed_set"] = FanSpeed(device_data["speed_set"])
 
             device_id = str(device_data["id"])
