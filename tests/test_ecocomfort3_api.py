@@ -13,6 +13,7 @@ from pyintelliclima.const import (
     FreeCoolingLevel,
     Season,
     ThresholdLevel,
+    SlaveRotation,
 )
 
 pytestmark = pytest.mark.asyncio
@@ -93,7 +94,7 @@ async def test_set_offsets_uses_eco3_endpoint(mock_post):
     api = IntelliClimaEcocomfort3API(session, token_headers={"TOKEN": "tok"})
     mock_post.return_value = {"status": "OK"}
 
-    assert await api.set_temperature_and_humidity_offsets("AABBCCDD", -5.0, 1.0)
+    assert await api.set_temperature_and_humidity_offsets("AABBCCDD", -5.0, 1)
 
     mock_post.assert_awaited_once_with(
         session,
@@ -123,6 +124,18 @@ async def test_set_thresholds_uses_eco3_co2_field(mock_post):
         "eco3/send/",
         headers={"TOKEN": "tok"},
         json_payload={"trama": "0AAABBCCDD00182F002000007F0103827F7F000000000000C90D"},
+    )
+
+
+@patch.object(IntelliClimaEcocomfort3API, "set_advanced_settings", new_callable=AsyncMock)
+async def test_set_slave_rotation_calls_set_advanced_settings(mock_set_advanced):
+    api = IntelliClimaEcocomfort3API(MagicMock(), token_headers={})
+    mock_set_advanced.return_value = True
+
+    assert await api.set_slave_rotation("AABBCCDD", SlaveRotation.discordant)
+
+    mock_set_advanced.assert_awaited_once_with(
+        "AABBCCDD", slave_rotation=SlaveRotation.discordant
     )
 
 

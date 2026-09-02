@@ -68,15 +68,6 @@ def test_create_advanced_settings_command_threshold_off_ignores_advanced_flag():
     assert payload == "00"
 
 
-def test_create_advanced_settings_command_lux_advanced_flag():
-    command = create_advanced_settings_command(
-        "000005fe",
-        lux_threshold=ThresholdLevel.medium,
-        lux_threshold_advanced=True,
-    )
-    assert bytes.fromhex(command)[14] == 0x82
-
-
 # --- async wrapper methods ---
 
 
