@@ -25,16 +25,11 @@ This API was made by reverse engineering the cloud API, through the use of an an
 
 ### ECOCOMFORT 3 air-quality values
 
-ECOCOMFORT 3 reports separate VOC, CO2, and air-quality-index fields:
-
-- `voc_state` is the same device-reported VOC channel exposed by ECOCOMFORT 2.
-- `co2` is a separate manufacturer-designated CO2 channel. Field observations found physically
-  implausible values and poor agreement with a reference CO2 monitor, so consumers should treat
-  it as unverified raw data rather than a dependable ppm measurement.
-- `aqi` is the device's five-level indoor air-quality index.
-
-All three values are returned as strings. The distinction is also present in the official
-Intelliclima+ app, which parses separate VOC, CO2, and AQI channels for ECOCOMFORT 3.
+ECOCOMFORT 3 status responses populate the existing `voc_state`, `co2`, `aqi`, and `co2_thrs`
+fields. All values are returned as strings. Their exact sensor semantics have not yet been
+verified: field observations found physically implausible `co2` values, while `voc_state` has a
+400-unit floor characteristic of a VOC-derived eCO2 estimate. Consumers should therefore expose
+these fields as unverified raw data rather than dependable VOC or CO2 measurements.
 
 ## Credits
 

@@ -7,7 +7,12 @@ from dacite import WrongTypeError
 
 from pyintelliclima.api import IntelliClimaAPI
 from pyintelliclima.const import FanMode
-from pyintelliclima.intelliclima_types import IntelliClimaDevices, IntelliClimaECO3
+from pyintelliclima.intelliclima_types import (
+    IntelliClimaDevices,
+    IntelliClimaECO,
+    IntelliClimaECO3,
+    IntelliClimaVMCBase,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -136,14 +141,42 @@ async def test_get_all_device_status_eco3(mock_post, caplog):
 async def test_get_all_device_status_requests_eco2_and_eco3_together(mock_post):
     api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
     api.device_id_types = {"10": "ECO", "30": "ECO3"}
+
+    fixture_path = Path(__file__).parent / "fixtures" / "ecocomfort3_status.json"
+    eco3_response = json.loads(fixture_path.read_text())
+    eco_device = dict(eco3_response["data"][0])
+    eco_device["id"] = "10"
+    eco_device["model"] = json.dumps({"modello": "ECO", "tipo": "ECOCOMFORT"})
+    mock_post.return_value = {
+        "status": "OK",
+        "data": [eco_device, *eco3_response["data"]],
+    }
+
+    devices = await api.get_all_device_status()
+
+    assert devices.num_devices == 2
+    assert isinstance(devices.ecocomfort2_devices["10"], IntelliClimaECO)
+    assert isinstance(devices.ecocomfort2_devices["10"], IntelliClimaVMCBase)
+    assert not isinstance(devices.ecocomfort2_devices["10"], IntelliClimaECO3)
+    assert isinstance(devices.ecocomfort3_devices["30"], IntelliClimaECO3)
+    assert isinstance(devices.ecocomfort3_devices["30"], IntelliClimaVMCBase)
+    assert not isinstance(devices.ecocomfort3_devices["30"], IntelliClimaECO)
+    request_body = mock_post.call_args.kwargs["json_payload"]
+    assert request_body["ECOs"] == "10"
+    assert request_body["ECO3s"] == "30"
+
+
+@patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
+async def test_get_all_device_status_skips_unsupported_types(mock_post, caplog):
+    api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
+    api.device_id_types = {"40": "C900", "50": "RHINO"}
     mock_post.return_value = {"status": "OK", "data": []}
 
     devices = await api.get_all_device_status()
 
     assert devices.num_devices == 0
-    request_body = mock_post.call_args.kwargs["json_payload"]
-    assert request_body["ECOs"] == "10"
-    assert request_body["ECO3s"] == "30"
+    assert "C900" in caplog.text
+    assert "RHINO" in caplog.text
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)

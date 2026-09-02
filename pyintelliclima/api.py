@@ -7,7 +7,7 @@ import json
 import logging
 import uuid
 from dataclasses import asdict
-from typing import Any, Literal
+from typing import Any, ClassVar, Literal
 
 from aiohttp import ClientError, ClientSession
 from dacite import from_dict
@@ -182,8 +182,10 @@ class IntelliClimaAuthError(IntelliClimaAPIError):
     """Exception for authentication errors."""
 
 
-class IntelliClimaEcocomfortAPI:
-    """API client for specific ECOCOMFORT 2.0 communication."""
+class _IntelliClimaVMCAPI:
+    """Shared API client for the ECOCOMFORT VMC family."""
+
+    _endpoint_prefix: ClassVar[str]
 
     def __init__(self, session: ClientSession, token_headers: dict[str, Any]) -> None:
         """Initialize the ECOCOMFORT API client."""
@@ -191,40 +193,41 @@ class IntelliClimaEcocomfortAPI:
         self._token_headers = token_headers
 
     async def set_token_headers(self, token_headers: dict[str, Any]) -> None:
-        """Sets the ECOCOMFORT 2.0 API token headers."""
+        """Set the ECOCOMFORT API token headers."""
         self._token_headers = token_headers
 
+    async def _send_command(self, command: str) -> bool:
+        """Send a command frame to an ECOCOMFORT device."""
+        response = await post_to_session(
+            self._session,
+            f"{self._endpoint_prefix}/send/",
+            headers=self._token_headers,
+            json_payload={"trama": command},
+        )
+        if response.get("status") != "OK":
+            msg = f"Sending command did not succeed with status: {response.get('status')}"
+            raise IntelliClimaAPIError(msg)
+        await asyncio.sleep(REFRESH_DELAY)
+        return True
+
     async def turn_off(self, device_sn: str) -> bool:
-        """Turn off an ECOCOMFORT 2.0 device."""
+        """Turn off an ECOCOMFORT device."""
         return await self.set_mode_speed(device_sn, mode=FanMode.off, speed=FanSpeed.off)
 
     async def set_mode_speed(self, device_sn: str, mode: FanMode, speed: FanSpeed) -> bool:
-        """Set the mode and speed of an ecocomfort device."""
+        """Set the mode and speed of an ECOCOMFORT device."""
         command = create_mode_speed_command(device_sn, mode, speed)
-        payload = {"trama": command}
-        LOGGER.debug(
-            "Sending command: %s",
-            command,
-        )
-        response = await post_to_session(
-            self._session,
-            "eco/send/",
-            headers=self._token_headers,
-            json_payload=payload,
-        )
-
-        status = response.get("status")
-        if status != "OK":
-            msg = f"Setting mode and speed did not succeed with status: {status}"
-            raise IntelliClimaAPIError(msg)
-
-        # Necessary delay for device status to actually update to the set mode and speed
-        await asyncio.sleep(REFRESH_DELAY)
-        return True
+        return await self._send_command(command)
 
     async def set_mode_speed_auto(self, device_sn: str) -> bool:
         """Set the auto preset mode and speed."""
         return await self.set_mode_speed(device_sn, mode=FanMode.sensor, speed=FanSpeed.auto_set)
+
+
+class IntelliClimaEcocomfortAPI(_IntelliClimaVMCAPI):
+    """API client for specific ECOCOMFORT 2.0 communication."""
+
+    _endpoint_prefix = "eco"
 
     async def set_season(self, device_sn: str, season: Season) -> bool:
         """Set winter/summer mode for an ecocomfort device."""
@@ -316,37 +319,10 @@ class IntelliClimaEcocomfortAPI:
         return await self.set_advanced_settings(device_sn, slave_rotation=rotation)
 
 
-class IntelliClimaEcocomfort3API:
+class IntelliClimaEcocomfort3API(_IntelliClimaVMCAPI):
     """API client for ECOCOMFORT 3 communication."""
 
-    def __init__(self, session: ClientSession, token_headers: dict[str, Any]) -> None:
-        """Initialize the ECOCOMFORT 3 API client."""
-        self._session = session
-        self._token_headers = token_headers
-
-    async def set_token_headers(self, token_headers: dict[str, Any]) -> None:
-        """Set the ECOCOMFORT 3 API token headers."""
-        self._token_headers = token_headers
-
-    async def turn_off(self, device_sn: str) -> bool:
-        """Turn off an ECOCOMFORT 3 device."""
-        return await self.set_mode_speed(device_sn, mode=FanMode.off, speed=FanSpeed.off)
-
-    async def set_mode_speed(self, device_sn: str, mode: FanMode, speed: FanSpeed) -> bool:
-        """Set the mode and speed of an ECOCOMFORT 3 device."""
-        command = create_mode_speed_command(device_sn, mode, speed)
-        await post_to_session(
-            self._session,
-            "eco3/send/",
-            headers=self._token_headers,
-            json_payload={"trama": command},
-        )
-        await asyncio.sleep(REFRESH_DELAY)
-        return True
-
-    async def set_mode_speed_auto(self, device_sn: str) -> bool:
-        """Set the automatic sensor mode and speed."""
-        return await self.set_mode_speed(device_sn, mode=FanMode.sensor, speed=FanSpeed.auto_set)
+    _endpoint_prefix = "eco3"
 
 
 class IntelliClimaAPI:
@@ -448,13 +424,9 @@ class IntelliClimaAPI:
         get_device_body = {
             "IDs": "",
             "ECOs": devices_eco_string,
-            "C900s": "",
-            "RHINOs": "",
             "ECO3s": devices_eco3_string,
             "includi_eco": True,
             "includi_ledot": True,
-            "includi_c900": True,
-            "includi_rhino": True,
             "includi_eco3": True,
         }
         LOGGER.debug(

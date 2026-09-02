@@ -14,8 +14,8 @@ not hardcoded in this repo.
 - `IntelliClimaEcocomfort3API` control client for power, mode, speed, and automatic sensor mode
   through the `eco3/send/` endpoint.
 - `IntelliClimaECO3` model and `IntelliClimaDevices.ecocomfort3_devices` collection.
-- ECOCOMFORT 3 VOC (`voc_state`), estimated CO2 (`co2`), and five-level air-quality index
-  (`aqi`) status values.
+- ECOCOMFORT 3 status parsing populates the existing `voc_state`, `co2`, `aqi`, and
+  `co2_thrs` fields.
 
 ## [0.4.1] - 2026-08-04
 

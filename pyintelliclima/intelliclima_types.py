@@ -125,8 +125,8 @@ class IntelliClimaECOCustomProgram:
 
 
 @dataclass
-class IntelliClimaECO:
-    """Class with all device status data for ECOCOMFORT 2.0."""
+class IntelliClimaVMCBase:
+    """Status fields common to the ECOCOMFORT VMC family."""
 
     id: str
     crono_sn: str
@@ -202,7 +202,12 @@ class IntelliClimaECO:
 
 
 @dataclass
-class IntelliClimaECO3(IntelliClimaECO):
+class IntelliClimaECO(IntelliClimaVMCBase):
+    """Status data returned by an ECOCOMFORT 2.0 device."""
+
+
+@dataclass
+class IntelliClimaECO3(IntelliClimaVMCBase):
     """Status data returned by an ECOCOMFORT 3 device."""
 
 

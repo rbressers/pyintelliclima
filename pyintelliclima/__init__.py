@@ -11,6 +11,7 @@ from .intelliclima_types import (
     IntelliClimaECO,
     IntelliClimaECO3,
     IntelliClimaLoginBody,
+    IntelliClimaVMCBase,
 )
 
 __all__ = (
@@ -23,5 +24,6 @@ __all__ = (
     "IntelliClimaC800",
     "IntelliClimaECO",
     "IntelliClimaECO3",
+    "IntelliClimaVMCBase",
     "IntelliClimaLoginBody",
 )
