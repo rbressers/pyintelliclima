@@ -198,15 +198,13 @@ class _IntelliClimaVMCAPI:
 
     async def _send_command(self, command: str) -> bool:
         """Send a command frame to an ECOCOMFORT device."""
-        response = await post_to_session(
+        LOGGER.debug("Sending command: %s", command)
+        await post_to_session(
             self._session,
             f"{self._endpoint_prefix}/send/",
             headers=self._token_headers,
             json_payload={"trama": command},
         )
-        if response.get("status") != "OK":
-            msg = f"Sending command did not succeed with status: {response.get('status')}"
-            raise IntelliClimaAPIError(msg)
         await asyncio.sleep(REFRESH_DELAY)
         return True
 

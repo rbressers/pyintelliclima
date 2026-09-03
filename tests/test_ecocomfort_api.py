@@ -41,13 +41,13 @@ async def test_set_mode_speed_ok(mock_post):
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
-async def test_set_mode_speed_error_status_raises(mock_post):
+async def test_set_mode_speed_propagates_request_error(mock_post):
     session = MagicMock()
     api = IntelliClimaEcocomfortAPI(session, token_headers={})
 
-    mock_post.return_value = {"status": "ERR"}
+    mock_post.side_effect = IntelliClimaAPIError("Got non-OK response status: ERR")
 
-    with pytest.raises(IntelliClimaAPIError):
+    with pytest.raises(IntelliClimaAPIError, match="non-OK response status"):
         await api.set_mode_speed("12345678", "01", "02")
 
 
