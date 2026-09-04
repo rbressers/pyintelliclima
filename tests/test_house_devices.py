@@ -55,6 +55,26 @@ async def test_set_house_and_device_ids_merges_multiple_houses(mock_post, caplog
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
+async def test_set_house_and_device_ids_discovers_eco3(mock_post, caplog):
+    api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
+    api.user_id = "user-id"
+
+    mock_post.return_value = {
+        "status": "OK",
+        "houses": {
+            "1": [
+                {"id": "30", "tipo": "ECO3"},
+            ]
+        },
+    }
+
+    await api.set_house_and_device_ids()
+
+    assert api.device_id_types == {"30": "ECO3"}
+    assert "Error while getting houses" not in caplog.text
+
+
+@patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
 async def test_set_house_and_device_ids_logs_error(mock_post, caplog):
     api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
     api.user_id = "user-id"

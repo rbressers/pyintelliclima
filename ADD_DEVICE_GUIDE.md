@@ -1,7 +1,7 @@
 # Adding Support for New IntelliClima Devices
 
 This guide explains how to capture the network traffic of the official **IntelliClima+**
-Android app so that new device types (such as the ECOCOMFORT 3.0) can be reverse-engineered
+Android app so that new device types (such as the RHINOCOMFORT 3) can be reverse-engineered
 and added to this library.
 
 You do **not** need programming experience to follow this guide, but it's definitely helpful if you have some Linux (commandline) experience. What you do need is a Linux
@@ -345,7 +345,7 @@ the offending request by clicking it and pressing `d`, then re-export with **Fil
 Open a new GitHub issue on this repository and attach the exported `.mitm` (or `.har`) file.
 Please include the following information in the issue:
 
-- Your **device model** (for example: IntelliClima ECOCOMFORT 3.0)
+- Your **device model** (for example: IntelliClima RHINOCOMFORT 3)
 - A short description of **what actions you performed** in the app while capturing
   (for example: "logged in, checked device status, set fan speed to medium, set auto mode"). Be very specific here in exactly what steps you took, and in what order. Otherwise it's very difficult to know which request corresponds to which action.
 - Your **operating system** (Ubuntu version) and your **mitmproxy version**

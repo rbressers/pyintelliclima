@@ -1,11 +1,18 @@
 import json
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from dacite import WrongTypeError
 
 from pyintelliclima.api import IntelliClimaAPI
-from pyintelliclima.intelliclima_types import IntelliClimaDevices
+from pyintelliclima.const import FanMode
+from pyintelliclima.intelliclima_types import (
+    IntelliClimaDevices,
+    IntelliClimaECO,
+    IntelliClimaECO3,
+    IntelliClimaVMCBase,
+)
 
 pytestmark = pytest.mark.asyncio
 
@@ -100,22 +107,76 @@ async def test_get_all_device_status_basic(mock_post):
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
-async def test_get_all_device_status_eco3_only_no_crash(mock_post, caplog):
-    """ECO3-only device lists must not crash: unsupported devices are skipped with a
-    warning and an empty IntelliClimaDevices is returned."""
-    import logging
-
+async def test_get_all_device_status_eco3(mock_post, caplog):
     api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
-    api.device_id_types = {"20": "ECO3"}
+    api.device_id_types = {"30": "ECO3"}
 
-    mock_post.return_value = {"status": "OK", "data": []}
+    fixture_path = Path(__file__).parent / "fixtures" / "ecocomfort3_status.json"
+    mock_post.return_value = json.loads(fixture_path.read_text())
 
-    with caplog.at_level(logging.WARNING, logger="pyintelliclima.api"):
-        devices = await api.get_all_device_status()
+    devices = await api.get_all_device_status()
 
     assert isinstance(devices, IntelliClimaDevices)
+    assert devices.num_devices == 1
+    assert devices.ecocomfort2_devices == {}
+    assert "30" in devices.ecocomfort3_devices
+    eco3 = devices.ecocomfort3_devices["30"]
+    assert isinstance(eco3, IntelliClimaECO3)
+    assert eco3.model.modello == "ECO3"
+    assert eco3.fw == "0.9.6"
+    assert eco3.voc_thrs is None
+    assert eco3.mode_set is FanMode.sensor
+    assert eco3.co2 == "510"
+    assert eco3.voc_state == "750"
+    assert eco3.aqi == "3"
+    assert "unsupported" not in caplog.text
+
+    request_body = mock_post.call_args.kwargs["json_payload"]
+    assert request_body["ECO3s"] == "30"
+    assert request_body["ECOs"] == ""
+    assert request_body["includi_eco3"] is True
+
+
+@patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
+async def test_get_all_device_status_requests_eco2_and_eco3_together(mock_post):
+    api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
+    api.device_id_types = {"10": "ECO", "30": "ECO3"}
+
+    fixture_path = Path(__file__).parent / "fixtures" / "ecocomfort3_status.json"
+    eco3_response = json.loads(fixture_path.read_text())
+    eco_device = dict(eco3_response["data"][0])
+    eco_device["id"] = "10"
+    eco_device["model"] = json.dumps({"modello": "ECO", "tipo": "ECOCOMFORT"})
+    mock_post.return_value = {
+        "status": "OK",
+        "data": [eco_device, *eco3_response["data"]],
+    }
+
+    devices = await api.get_all_device_status()
+
+    assert devices.num_devices == 2
+    assert isinstance(devices.ecocomfort2_devices["10"], IntelliClimaECO)
+    assert isinstance(devices.ecocomfort2_devices["10"], IntelliClimaVMCBase)
+    assert not isinstance(devices.ecocomfort2_devices["10"], IntelliClimaECO3)
+    assert isinstance(devices.ecocomfort3_devices["30"], IntelliClimaECO3)
+    assert isinstance(devices.ecocomfort3_devices["30"], IntelliClimaVMCBase)
+    assert not isinstance(devices.ecocomfort3_devices["30"], IntelliClimaECO)
+    request_body = mock_post.call_args.kwargs["json_payload"]
+    assert request_body["ECOs"] == "10"
+    assert request_body["ECO3s"] == "30"
+
+
+@patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
+async def test_get_all_device_status_skips_unsupported_types(mock_post, caplog):
+    api = IntelliClimaAPI(MagicMock(), username="user", password="pass")
+    api.device_id_types = {"40": "C900", "50": "RHINO"}
+    mock_post.return_value = {"status": "OK", "data": []}
+
+    devices = await api.get_all_device_status()
+
     assert devices.num_devices == 0
-    assert any("ECO3" in record.message for record in caplog.records)
+    assert "C900" in caplog.text
+    assert "RHINO" in caplog.text
 
 
 @patch("pyintelliclima.api.post_to_session", new_callable=AsyncMock)
